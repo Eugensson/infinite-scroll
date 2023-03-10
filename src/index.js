@@ -4,6 +4,7 @@ const axios = require('axios').default;
 import CardsApiService from './cards-service';
 import SimpleLightbox from 'simplelightbox';
 import 'simplelightbox/dist/simple-lightbox.min.css';
+import throttle from 'lodash.throttle';
 
 let lightbox = new SimpleLightbox('.gallery a', {
   captionDelay: 250,
@@ -15,12 +16,27 @@ const searchForm = document.querySelector('#search-form');
 const submitBtn = document.querySelector('[type="submit"]');
 const gallery = document.querySelector('.gallery');
 const loadMoreBtn = document.querySelector('.load-more');
-loadMoreBtn.style.display = 'none';
 
 const cardsApiService = new CardsApiService();
 
 searchForm.addEventListener('submit', onSearch);
-loadMoreBtn.addEventListener('click', onLoadMore);
+
+(() => {
+  window.addEventListener('scroll', throttle(checkPosition, 300));
+  window.addEventListener('resize', throttle(checkPosition, 300));
+})();
+
+async function checkPosition() {
+  const height = document.body.offsetHeight;
+  const screenHeight = window.innerHeight;
+  const scrolled = window.scrollY;
+  const threshold = height - screenHeight / 4;
+  const position = scrolled + screenHeight;
+
+  if (position >= threshold) {
+    await onLoadMore();
+  }
+}
 
 function onSearch(e) {
   e.preventDefault();
@@ -39,11 +55,10 @@ function onSearch(e) {
       Notiflix.Notify.failure(
         'Sorry, there are no images matching your search query. Please try again.'
       );
-      loadMoreBtn.style.display = 'none';
+
       return;
     } else {
       Notiflix.Notify.info(`Hooray! We found ${data.totalHits} images.`);
-      loadMoreBtn.style.display = 'flex';
     }
 
     appendCardsMarkup(data);
@@ -55,7 +70,6 @@ function onSearch(e) {
 
 function onLoadMore() {
   cardsApiService.fetchCards().then(data => {
-    console.log(cardsApiService.currentPage(data));
     if (cardsApiService.currentPage(data) < Math.ceil(data.totalHits / 40)) {
       appendCardsMarkup(data);
       lightbox.refresh();
